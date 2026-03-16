@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
 // src/zig/utils.zig
 const std = @import("std");
 
