@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: PMPL-1.0-or-later
+= LowLevel.jl — Show Me The Receipts
+:toc:
+:icons: font
+
+The README makes claims. This file backs them up.
+
+[quote, README]
+____
+LowLevel.jl is not just a bridge; it is a **Resource-Aware Hardware Orchestrator**. It provides the Hyperpolymath ecosystem with deep-cycle diagnostics, self-healing fault tolerance, and native execution paths for every major processing unit in modern and future computing.
+____
+
+== Technology Choices
+
+[cols="1,2"]
+|===
+| Technology | Learn More
+
+| **Julia** | https://julialang.org
+|===
+
+== File Map
+
+[cols="1,2"]
+|===
+| Path | What's There
+
+| `src/` | Source code
+| `test(s)/` | Test suite
+|===
+
+== Questions?
+
+Open an issue or reach out directly — happy to explain anything in more detail.
