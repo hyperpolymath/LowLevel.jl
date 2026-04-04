@@ -1,32 +1,151 @@
 // SPDX-License-Identifier: PMPL-1.0-or-later
 = LowLevel.jl — Show Me The Receipts
+Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
 :toc:
+:toclevels: 3
 :icons: font
 
-The README makes claims. This file backs them up.
+The README makes claims. This file backs them up with specific code locations,
+honest caveats, and enough trace information for an external reviewer to navigate
+the codebase cold.
 
-[quote, README]
+== Claim 1: Resource-Aware Hardware Orchestrator bridging SiliconCore and HardwareResilience
+
+[quote, README — Overview]
 ____
-LowLevel.jl is not just a bridge; it is a **Resource-Aware Hardware Orchestrator**. It provides the Hyperpolymath ecosystem with deep-cycle diagnostics, self-healing fault tolerance, and native execution paths for every major processing unit in modern and future computing.
+LowLevel.jl is not just a bridge; it is a Resource-Aware Hardware Orchestrator.
+It provides the Hyperpolymath ecosystem with deep-cycle diagnostics, self-healing
+fault tolerance, and native execution paths for every major processing unit in
+modern and future computing.
 ____
 
-== Technology Choices
+*How it works:* `src/LowLevel.jl` is a thin 63-line meta-orchestrator. It takes
+two package dependencies — `SiliconCore` (CPU feature detection and architecture
+dispatch) and `HardwareResilience` (supervised kernel execution with retry/backoff)
+— and composes them into a single entry point.
 
-[cols="1,2"]
-|===
-| Technology | Learn More
+The key composed function is `peak_performance_op(a, b)`:
+1. It instantiates a `KernelGuardian` from `HardwareResilience`
+2. It calls `monitor_kernel` to execute `SiliconCore.vector_add_asm(a, b)` under
+   guardian supervision
+3. On success it returns the element-wise sum; on guardian exhaustion it returns `nothing`
 
-| **Julia** | https://julialang.org
-|===
+The module re-exports `CpuFeatures`, `detect_cpu_features`, `has_feature`,
+`detect_arch`, `vector_add_asm` from `SiliconCore`, and `KernelGuardian`,
+`monitor_kernel` from `HardwareResilience`.
+
+*Honest caveat:* The README's description of "deep-cycle diagnostics", "NUMA
+topology mapping", "energy-aware computing", and a rich multi-directory source
+layout (`hardware/`, `accelerators/`, `resilience/`, `diagnostics/`, `asm/`, `zig/`)
+describes aspirational architecture documented in the README. The current
+`src/LowLevel.jl` is 63 lines that compose two deps. The sub-directories under
+`src/` exist but are mostly scaffolding stubs rather than complete implementations.
+The `peak_performance_op` function is the only composed API presently active.
+
+== Claim 2: Self-Healing fault tolerance with transparent AVX-512 to scalar fallback
+
+[quote, README — Resilience & Self-Healing]
+____
+Self-Healing: Automated kernel hot-swapping. If an AVX-512 kernel triggers a
+hardware fault, the system transparently downgrades to a verified scalar fallback.
+____
+
+*How it works (current state):* Self-healing is provided entirely by
+`HardwareResilience.monitor_kernel`. When the operation passed to `peak_performance_op`
+throws any exception, the guardian retries with exponential backoff up to
+`max_retries` (default 3). If all retries fail, the guardian transitions to
+`:degraded` and returns `nothing`. The caller must handle `nothing` as the
+degraded signal and supply their own scalar fallback.
+
+`SiliconCore.vector_add_asm` dispatches to architecture-specific implementations
+via `detect_arch()` — x86_64, aarch64, or pure Julia fallback — providing the
+basis for the hot-swap narrative.
+
+*Honest caveat:* There is no automatic detection of AVX-512 faults that
+re-invokes a scalar path. The "transparent downgrade" is a manual concern:
+the caller wraps the operation in a guardian and handles `nothing` return.
+The architecture-aware dispatch in SiliconCore selects the best available
+implementation at load time, not on runtime fault.
+
+== How It Is Checked
+
+Tests live in `test/runtests.jl`. The tests include `SiliconCore.jl` and
+`HardwareResilience.jl` directly from sibling repository paths to avoid
+package resolution. Coverage includes:
+
+- `SiliconCore` sub-module accessible: `detect_arch()` returns a `Symbol`
+- `HardwareResilience` sub-module accessible: `KernelGuardian` and
+  `monitor_kernel` are defined
+- `peak_performance_op` with integers: `[1,2,3] + [4,5,6] = [5,7,9]`
+- `peak_performance_op` with floats: `[1.0,2.0] + [3.0,4.0] = [4.0,6.0]`
+- `peak_performance_op` with simulated hardware fault: returns `nothing`
+- `peak_performance_op` with empty vectors: returns `Int[]`
 
 == File Map
 
-[cols="1,2"]
+[cols="2,4"]
 |===
 | Path | What's There
 
-| `src/` | Source code
-| `test(s)/` | Test suite
+| `src/LowLevel.jl`
+| Active meta-orchestrator (~63 lines). `using SiliconCore` and
+  `using HardwareResilience`, re-export key symbols, `peak_performance_op`.
+
+| `src/hardware.jl`
+| Hardware topology stub (NUMA, cache boundary detection — scaffolding).
+
+| `src/accelerators/`
+| Per-accelerator dispatch stubs (NPU, TPU, QPU, GPU paths — aspirational).
+
+| `src/asm/`
+| Multi-architecture assembly scaffold (x86, ARM, RISC-V targets).
+
+| `src/resilience/`
+| Resilience sub-module scaffold (delegates to HardwareResilience dependency).
+
+| `src/diagnostics/`
+| Telemetry and performance monitoring scaffold.
+
+| `src/zig/`, `src/c/`, `src/d/`, `src/bridge/`, `src/system/`, `src/backends/`
+| Additional scaffolding directories for future FFI and backend integration.
+
+| `test/runtests.jl`
+| Full test suite. Includes sibling repos directly; tests composition of
+  SiliconCore + HardwareResilience via `peak_performance_op`.
+
+| `Project.toml`
+| Package identity. Depends on `SiliconCore` and `HardwareResilience` as
+  registered Julia packages.
+
+| `LICENSE` / `LICENSES/`
+| PMPL-1.0-or-later full text.
+|===
+
+== Dogfooded Across The Account
+
+[cols="2,4"]
+|===
+| Repo | How LowLevel (or this domain) appears
+
+| `HardwareResilience.jl`
+| Direct dependency: the `KernelGuardian` and `monitor_kernel` that LowLevel
+  re-exports live here.
+
+| `AcceleratorGate.jl`
+| Sibling Metal Layer package providing accelerator type hierarchy and
+  platform-aware backend selection; LowLevel provides the execution layer.
+
+| `Hyperpolymath.jl`
+| Listed as one of the six "Metal Layer" packages (`using LowLevel`).
+  LowLevel is the unified entry point to the entire Metal Layer for consumers
+  of the metapackage.
+
+| `developer-ecosystem/julia-ecosystem/`
+| Part of the hardware/systems tier of the Julia ecosystem collection.
+
+| `statistease`
+| Statistical computing jobs use the peak-performance patterns this package
+  establishes as the foundation for hardware-optimised number crunching.
 |===
 
 == Questions?
