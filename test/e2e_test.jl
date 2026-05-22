@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MPL-2.0
-# (PMPL-1.0-or-later preferred; MPL-2.0 required for Julia ecosystem)
+# (MPL-2.0 preferred; MPL-2.0 required for Julia ecosystem)
 # E2E pipeline tests for LowLevel.jl.
 # Tests the coordinated pipeline: SiliconCore vector operation wrapped in
 # HardwareResilience monitoring — the peak_performance_op pattern.
