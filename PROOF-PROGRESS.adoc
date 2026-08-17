@@ -1,0 +1,353 @@
+// SPDX-License-Identifier: CC-BY-SA-4.0
+// SPDX-FileCopyrightText: 2026 Jonathan D.A. Jewell <j.d.a.jewell@open.ac.uk>
+//
+// Proof Progress Snapshot — LowLevel.jl
+// Generated: 2026-08-14
+
+= LowLevel.jl — Proof/Verification Guarantee Progress Snapshot
+:toc:
+:icons: font
+
+This document provides an indicative state of progress on formal guarantees for
+the LowLevel.jl Julia package as of 2026-08-14. It consolidates information from:
+
+- `README.md` — Project overview and hardware orchestrator claims
+- `EXPLAINME.adoc` — Verification receipts and honest caveats
+- `src/LowLevel.jl` — Meta-orchestrator implementation
+- `test/runtests.jl` — Integration test suite
+
+== Headline Status
+
+[cols="1,2,3",options="header"]
+|===
+| Component | Status | Details
+
+| Resource-Aware Hardware Orchestrator | 🟡 PARTIAL | 63-line meta-orchestrator composing SiliconCore + HardwareResilience
+
+| SiliconCore integration | ✅ COMPLETE | Re-exports CpuFeatures, detect_cpu_features, has_feature, detect_arch, vector_add_asm
+
+| HardwareResilience integration | ✅ COMPLETE | Re-exports KernelGuardian, monitor_kernel
+
+| Composed API | ✅ COMPLETE | peak_performance_op(a, b) with guardian supervision
+
+| Architecture detection | ✅ VERIFIED | detect_arch() returns Symbol (x86_64, aarch64, or fallback)
+
+| Self-healing fault tolerance | 🟡 PARTIAL | guardian retries with exponential backoff up to max_retries=3
+
+| AVX-512 to scalar fallback | ⚠️ MANUAL | Caller must handle nothing return and supply scalar fallback
+
+| Deep-cycle diagnostics | ❌ NOT IMPLEMENTED | Described in README but not implemented
+
+| NUMA topology mapping | ❌ NOT IMPLEMENTED | Described in README but not implemented
+
+| Energy-aware computing | ❌ NOT IMPLEMENTED | Described in README but not implemented
+
+| Hardware directory structure | ⚠️ SCAFFOLDING | src/hardware/, accelerators/, resilience/, diagnostics/, asm/, zig/ exist but mostly stubs
+
+| GPU support (CUDA, ROCm, Metal) | ❌ NOT IMPLEMENTED | Architecture describes; not implemented
+
+| NPU/TPU support | ❌ NOT IMPLEMENTED | Architecture describes; not implemented
+
+| QPU support | ❌ NOT IMPLEMENTED | Architecture describes; not implemented
+
+| PPU/MPU support | ❌ NOT IMPLEMENTED | Architecture describes; not implemented
+
+| DSP/APU support | ❌ NOT IMPLEMENTED | Architecture describes; not implemented
+
+| IOPU support | ❌ NOT IMPLEMENTED | Architecture describes; not implemented
+|===
+
+**Overall:** LowLevel.jl currently provides a **thin meta-orchestrator** (63 lines) that
+composes SiliconCore.jl (CPU feature detection) and HardwareResilience.jl
+(supervised kernel execution). The `peak_performance_op` function is the primary
+composed API, providing guardian-supervised execution with retry/backoff.
+
+**Honest Assessment:** Much of the README's ambitious architecture (deep-cycle
+diagnostics, NUMA topology, energy-aware computing, multi-accelerator support) is
+**aspirational** — the sub-directories exist as scaffolding stubs rather than
+complete implementations. The current code is a minimal integration layer.
+
+== Current Implementation
+
+=== The Meta-Orchestrator
+
+`src/LowLevel.jl` (63 lines) provides:
+
+1. **Composition of dependencies:**
+   - Imports and re-exports from `SiliconCore`: `CpuFeatures`, `detect_cpu_features`, `has_feature`, `detect_arch`, `vector_add_asm`
+   - Imports and re-exports from `HardwareResilience`: `KernelGuardian`, `monitor_kernel`
+
+2. **Primary composed function:** `peak_performance_op(a, b)`
+   - Instantiates a `KernelGuardian` from HardwareResilience
+   - Calls `monitor_kernel` to execute `SiliconCore.vector_add_asm(a, b)` under supervision
+   - On success: returns element-wise sum
+   - On guardian exhaustion: returns `nothing`
+
+=== SiliconCore Integration
+
+SiliconCore.jl provides:
+
+[cols="1,3,1",options="header"]
+|===
+| Function | Description | Status
+
+| `detect_arch()` | Returns architecture symbol (x86_64, aarch64, fallback) | ✅ VERIFIED
+
+| `detect_cpu_features()` | Detects CPU features (AVX-512, etc.) | ✅ VERIFIED
+
+| `has_feature(feat)` | Checks if specific feature is available | ✅ VERIFIED
+
+| `CpuFeatures` | Type representing CPU feature set | ✅ VERIFIED
+
+| `vector_add_asm(a, b)` | Architecture-dispatched vector addition | ✅ VERIFIED
+|===
+
+**Dispatch Mechanism:** `vector_add_asm` dispatches to architecture-specific
+implementations via `detect_arch()` at load time, providing the basis for
+the hot-swap narrative.
+
+=== HardwareResilience Integration
+
+HardwareResilience.jl provides:
+
+[cols="1,3,1",options="header"]
+|===
+| Function/Type | Description | Status
+
+| `KernelGuardian` | Monitors and tracks kernel status | ✅ VERIFIED
+
+| `monitor_kernel` | Executes operation under guardian supervision | ✅ VERIFIED
+
+| Retry logic | Exponential backoff up to max_retries (default 3) | ✅ VERIFIED
+
+| Degraded state | Returns nothing after all retries fail | ✅ VERIFIED
+|===
+
+**Self-Healing Behavior:** When `peak_performance_op` operation throws an
+exception, the guardian retries with exponential backoff. If all retries
+fail, the guardian transitions to `:degraded` and returns `nothing`.
+
+== Test Evidence
+
+From EXPLAINME.adoc lines 73-80:
+
+Tests in `test/runtests.jl` include SiliconCore.jl and HardwareResilience.jl directly
+from sibling repository paths. Coverage includes:
+
+[cols="1,3,1",options="header"]
+|===
+| Test | Description | Status
+
+| SiliconCore sub-module accessible | detect_arch() returns a Symbol | ✅ PASS
+
+| HardwareResilience sub-module accessible | KernelGuardian and monitor_kernel are defined | ✅ PASS
+
+| peak_performance_op with integers | [1,2,3] + [4,5,6] = [5,7,9] | ✅ PASS
+
+| Architecture detection | detect_arch() works correctly | ✅ PASS
+
+| Guardian retry logic | monitor_kernel retries on failure | ✅ PASS
+
+| Degraded state handling | Returns nothing after exhaustion | ✅ PASS
+|===
+
+== Formal Verification Status
+
+=== Current Formal Content
+
+[cols="1,3,1,1",options="header"]
+|===
+| Area | Formal Verification | Status | Evidence
+
+| Architecture detection | Correct symbol return | ✅ TESTED | Tests pass
+
+| Vector addition | Element-wise sum correctness | ✅ TESTED | [1,2,3] + [4,5,6] = [5,7,9]
+
+| Guardian supervision | Kernel monitoring | ✅ TESTED | Tests pass
+
+| Retry logic | Exponential backoff | ✅ TESTED | Tests pass
+
+| Degraded handling | Nothing return on failure | ✅ TESTED | Tests pass
+
+| AVX-512 fault detection | Automatic scalar fallback | ❌ NOT IMPLEMENTED | Manual concern
+|===
+
+=== Planned Formal Proofs
+
+Integration with Axiom.jl would enable:
+
+[source,julia]
+----
+using Axiom
+using LowLevel
+
+# Vector addition properties
+@prove forall(a, b) do 
+    peak_performance_op(a, b) == a + b || peak_performance_op(a, b) == nothing end
+
+# Architecture detection
+@prove forall() do detect_arch() in [:x86_64, :aarch64, :fallback] end
+
+# Guardian properties
+@prove forall(op) do 
+    result = monitor_kernel(op)
+    result == op() || result == nothing end
+
+# Retry count
+@prove forall(op, guardian) do 
+    retries(guardian) <= guardian.max_retries end
+----
+
+== Aspirational Architecture
+
+The README describes an ambitious architecture that is **not yet implemented**:
+
+=== Described but Not Implemented
+
+[cols="1,2,1",options="header"]
+|===
+| Feature | Description | Status
+
+| Deep-cycle diagnostics | Real-time monitoring of thermal throttling, cache misses, branch mispredictions | ❌ NOT IMPLEMENTED
+
+| NUMA topology mapping | Deep awareness of NUMA nodes, L1/L2/L3 cache boundaries, memory bandwidth | ❌ NOT IMPLEMENTED
+
+| Energy-aware computing | Dynamic frequency scaling hooks for performance-per-watt | ❌ NOT IMPLEMENTED
+
+| Multi-accelerator support | GPU, NPU, TPU, QPU, PPU, MPU, DSP, APU, IOPU | ❌ NOT IMPLEMENTED
+
+| Self-healing (automatic) | Transparent AVX-512 to scalar fallback on hardware fault | ⚠️ MANUAL
+
+| Resource awareness | Topology mapping, energy-aware computing | ❌ NOT IMPLEMENTED
+|===
+
+=== Directory Structure (Mostly Scaffolding)
+
+[cols="1,2,1",options="header"]
+|===
+| Directory | Status | Notes
+
+| src/hardware/ | ⚠️ STUB | Topology & Feature Detection — mostly stubs
+
+| src/accelerators/ | ⚠️ STUB | NPU, TPU, QPU, GPU modules — mostly stubs
+
+| src/resilience/ | ⚠️ STUB | Self-healing & Fault tolerance — mostly stubs
+
+| src/diagnostics/ | ⚠️ STUB | Telemetry & Performance monitoring — mostly stubs
+
+| src/asm/ | ⚠️ STUB | Multi-arch Assembly (x86, ARM, RISC-V) — mostly stubs
+
+| src/zig/ | ⚠️ STUB | Safe systems logic — mostly stubs
+
+| deps/ | ⚠️ STUB | Binary artifacts — directory exists
+|===
+
+== Ecosystem Integration
+
+LowLevel.jl is designed to integrate with the Hyperpolymath hardware ecosystem:
+
+[cols="1,2,1",options="header"]
+|===
+| Project | Connection | Status
+
+| SiliconCore.jl | CPU feature detection and architecture dispatch | ✅ INTEGRATED
+
+| HardwareResilience.jl | Supervised kernel execution with retry/backoff | ✅ INTEGRATED
+
+| AcceleratorGate.jl | Coprocessor type hierarchy | 🟡 POTENTIAL
+
+| Axiom.jl | Formal verification framework | 🟡 PLANNED
+|===
+
+**Design Philosophy:**
+
+LowLevel.jl is designed for "High-Stakes Silicon" where performance is
+non-negotiable and failure must be mathematically impossible. The current
+implementation is a minimal composition layer; the aspirational architecture
+described in the README would achieve this vision.
+
+== Current Status Summary
+
+[cols="1,2,1",options="header"]
+|===
+| Category | Description | Count/Status
+
+| Core implementation | Meta-orchestrator lines of code | 63 lines
+
+| Integrated dependencies | SiliconCore + HardwareResilience | 2 dependencies
+
+| Re-exported symbols | From both dependencies | 8 symbols
+
+| Primary API function | peak_performance_op | 1 function
+
+| Passing tests | Integration tests | 6+ tests
+
+| Implemented features | Architecture detection, vector addition, guardian | 3 features
+
+| Described features | Full hardware orchestrator | ~12 features
+
+| Completion | Actual vs. described | ~25%
+|===
+
+== Outstanding Work
+
+=== Immediate Next Steps
+
+1. **Implement hardware directories**: Fill out scaffolding in src/hardware/, accelerators/, resilience/, diagnostics/, asm/, zig/
+2. **Complete GPU support**: Add CUDA, ROCm, Metal backends
+3. **Implement NPU/TPU support**: Add neural and tensor processing unit backends
+4. **Implement QPU support**: Add quantum processing unit backend
+5. **Add deep-cycle diagnostics**: Implement thermal, cache, branch monitoring
+6. **Add NUMA topology mapping**: Implement NUMA node detection
+7. **Add energy-aware computing**: Implement frequency scaling hooks
+
+=== Medium-term Goals
+
+1. **Automatic fallback**: Implement automatic AVX-512 to scalar fallback on hardware fault
+2. **Complete accelerator suite**: All described accelerators implemented
+3. **Resource awareness**: Full topology and energy awareness
+4. **Self-healing**: Automatic kernel hot-swapping without caller intervention
+
+=== Long-term Vision
+
+1. **Full hardware orchestrator**: Complete "Resource-Aware Hardware Orchestrator"
+2. **Mathematically impossible failure**: Achieve the README's vision
+3. **Cross-platform support**: All major architectures and accelerators
+4. **Safety-critical certification**: Certified for high-stakes applications
+
+== Honest Caveats
+
+From EXPLAINME.adoc:
+
+. The README describes aspirational architecture with deep-cycle diagnostics,
+  NUMA topology mapping, energy-aware computing, and rich multi-directory layout.
+  The current `src/LowLevel.jl` is 63 lines that compose two deps.
+
+. The sub-directories under `src/` exist but are mostly scaffolding stubs rather
+  than complete implementations.
+
+. The `peak_performance_op` function is the only composed API presently active.
+
+. There is no automatic detection of AVX-512 faults that re-invokes a scalar path.
+  The "transparent downgrade" is a manual concern: the caller wraps the operation
+  in a guardian and handles `nothing` return.
+
+. The architecture-aware dispatch in SiliconCore selects the best available
+  implementation at load time, not on runtime fault.
+
+== References
+
+* https://github.com/hyperpolymath/SiliconCore.jl[SiliconCore.jl] — CPU feature detection
+* https://github.com/hyperpolymath/HardwareResilience.jl[HardwareResilience.jl] — Kernel supervision
+* https://github.com/hyperpolymath/AcceleratorGate.jl[AcceleratorGate.jl] — Coprocessor integration
+* https://github.com/hyperpolymath/Axiom.jl[Axiom.jl] — Formal verification
+
+== Document Information
+
+[cols="1,2"]
+|===
+| Generated | 2026-08-14 |
+| Author | Mistral Vibe (on behalf of Jonathan D.A. Jewell) |
+| Source | README.md, EXPLAINME.adoc, src/LowLevel.jl, test/runtests.jl |
+| Status | Snapshot — subject to change as implementation progresses |
+|===
