@@ -3,9 +3,7 @@
 # Property-based invariant tests for LowLevel.jl.
 
 using Test
-
-include(joinpath(@__DIR__, "..", "..", "SiliconCore.jl", "src", "SiliconCore.jl"))
-include(joinpath(@__DIR__, "..", "..", "HardwareResilience.jl", "src", "HardwareResilience.jl"))
+using LowLevel
 
 @testset "Property-Based Tests" begin
 

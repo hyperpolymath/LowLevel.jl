@@ -1,14 +1,6 @@
 # SPDX-License-Identifier: MPL-2.0
 using Test
-
-# LowLevel.jl includes SiliconCore.jl and HardwareResilience.jl via relative
-# paths that assume a specific directory layout. We test the sub-modules
-# individually and then test the coordinated peak_performance_op function
-# by including LowLevel from its own directory context.
-
-# First, test that sub-modules work independently
-include(joinpath(@__DIR__, "..", "..", "SiliconCore.jl", "src", "SiliconCore.jl"))
-include(joinpath(@__DIR__, "..", "..", "HardwareResilience.jl", "src", "HardwareResilience.jl"))
+using LowLevel
 
 @testset "LowLevel.jl" begin
 
@@ -24,35 +16,23 @@ include(joinpath(@__DIR__, "..", "..", "HardwareResilience.jl", "src", "Hardware
     end
 
     @testset "peak_performance_op with integers" begin
-        # Replicate peak_performance_op logic since include paths may not resolve
-        g = HardwareResilience.KernelGuardian("Global-Op", :Healthy)
-        result = HardwareResilience.monitor_kernel(g, () -> begin
-            SiliconCore.vector_add_asm([1, 2, 3], [4, 5, 6])
-        end)
+        result = peak_performance_op([1, 2, 3], [4, 5, 6])
         @test result == [5, 7, 9]
     end
 
     @testset "peak_performance_op with floats" begin
-        g = HardwareResilience.KernelGuardian("Global-Op", :Healthy)
-        result = HardwareResilience.monitor_kernel(g, () -> begin
-            SiliconCore.vector_add_asm([1.0, 2.0], [3.0, 4.0])
-        end)
+        result = peak_performance_op([1.0, 2.0], [3.0, 4.0])
         @test result == [4.0, 6.0]
     end
 
     @testset "peak_performance_op with error recovery" begin
-        g = HardwareResilience.KernelGuardian("Global-Op", :Healthy)
-        result = HardwareResilience.monitor_kernel(g, () -> begin
-            error("hardware fault simulation")
-        end)
+        # Incompatible dimensions fail inside the monitored vector operation.
+        result = peak_performance_op([1, 2], [3, 4, 5])
         @test result === nothing
     end
 
     @testset "peak_performance_op with empty vectors" begin
-        g = HardwareResilience.KernelGuardian("Global-Op", :Healthy)
-        result = HardwareResilience.monitor_kernel(g, () -> begin
-            SiliconCore.vector_add_asm(Int[], Int[])
-        end)
+        result = peak_performance_op(Int[], Int[])
         @test result == Int[]
     end
 
