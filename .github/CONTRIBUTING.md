@@ -72,8 +72,9 @@ under the same license as the project (see LICENSE).
 
 ## Signed commits
 
-Every commit that reaches the default branch must be signed; a ruleset refuses
-unsigned pushes. Estate policy:
+Every commit that reaches the default branch must be signed. The active
+`Require-Signed-Commits` ruleset enforces required signatures on the default
+branch. Estate policy:
 [SIGNING-POLICY](https://github.com/hyperpolymath/standards/blob/main/docs/SIGNING-POLICY.adoc).
 
 - **People and interactive agents** sign with an SSH key registered on GitHub
@@ -85,4 +86,5 @@ unsigned pushes. Estate policy:
 - Merge PRs with **squash**. The ruleset checks every commit on the PR branch,
   not just the result, so one unsigned commit blocks the merge. Re-create such a
   branch with signed commits (`git cherry-pick -S`) and open a new PR.
-  Rebase-merge replays commits unsigned and is disabled.
+  GitHub's rebase merge recreates commits without verified signatures, so it
+  does not satisfy the required-signatures ruleset.
